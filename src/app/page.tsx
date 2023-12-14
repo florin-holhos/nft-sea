@@ -8,6 +8,7 @@ import Image from "next/image";
 import * as Components from "components";
 import * as Helpers from "lib/helpers";
 import * as Types from "types";
+import * as Hooks from "hooks";
 import abiFile from "../../abi.json";
 
 const { abi } = abiFile;
@@ -25,8 +26,6 @@ export default function Home() {
     functionName: "mint",
   });
 
-  console.log({ data, mintError });
-
   const [selectedFile, setSelectedFile] = useState<File | null>();
   const [preview, setPreview] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<null | string>(null);
@@ -35,6 +34,9 @@ export default function Home() {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [listItemAfterMint, setListItemAfterMint] = useState(true);
+
+  // customize wui card position and appearance
+  Hooks.useWuiCardStyles();
 
   useEffect(() => {
     if (!selectedFile) {
@@ -114,7 +116,6 @@ export default function Home() {
     }
 
     const jsonUrl = `${process.env.NEXT_PUBLIC_PINATA_GATEWAY}/ipfs/${jsonUploadResponse.data.IpfsHash}`;
-
     setJsonData(jsonData);
 
     // mint NFT
@@ -124,6 +125,7 @@ export default function Home() {
     //   });
 
     //   console.log(nft.hash);
+    //   setJsonData(jsonData);
     // } catch (error) {
     //   console.log(error);
     // }
@@ -199,7 +201,7 @@ export default function Home() {
               htmlFor="nft-img"
               className="w-full hover:cursor-pointer flex items-center justify-center px-4 py-8 gap-2 text-lg flex-col"
             >
-              <div className="flex gap-1">
+              <div className="flex gap-1 relative">
                 <Image
                   src="upload-icon.svg"
                   width={100}
@@ -214,7 +216,7 @@ export default function Home() {
                   type="file"
                   name="upload"
                   id="nft-img"
-                  className="absolute opacity-0 -z-10"
+                  className="absolute opacity-0 -z-10 w-full"
                   onChange={handleFileSelect}
                 />
               </div>
@@ -262,14 +264,14 @@ export default function Home() {
             </div>
           )}
 
-          <div className="flex justify-evenly w-full gap-4">
+          <div className="flex justify-evenly w-full md:gap-4 flex-col sm:flex-row gap-8">
             <Components.Button
               id="mint-without-listing"
               title={canMint ? "Mint NFT" : "Wallet not connected"}
               disabled={!canMint}
               variant="text"
               type="submit"
-              className="flex-1"
+              className="flex-1 py-5"
               onMouseOver={handleMintButtonMouseOver}
               onMouseLeave={handleMintButtonMouseLeave}
               onClick={() => setListItemAfterMint(false)}
@@ -308,7 +310,7 @@ export default function Home() {
                 exit={{ opacity: 0, scale: 0 }}
               >
                 <div
-                  className="bg-white border w-full max-w-xl border-green-400 text-green-500 px-4 py-3 rounded relative bg-opacity-10 pr-14"
+                  className="bg-black border w-full max-w-xl border-green-400 text-green-500 px-4 py-3 rounded relative bg-opacity-80 pr-14"
                   role="alert"
                 >
                   <strong className="font-bold">Success!</strong>

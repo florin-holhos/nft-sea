@@ -12,7 +12,11 @@ const projectId = process.env.NEXT_PUBLIC_WALLET_PROJECT_ID!;
 const chains = [goerli];
 const wagmiConfig = defaultWagmiConfig({ chains, projectId });
 
-createWeb3Modal({ wagmiConfig, projectId, chains });
+createWeb3Modal({
+  wagmiConfig,
+  projectId,
+  chains,
+});
 
 const inter = Inter({ subsets: ["latin"] });
 

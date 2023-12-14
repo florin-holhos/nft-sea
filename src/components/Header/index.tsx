@@ -12,9 +12,9 @@ const Header: React.FC = () => {
   return (
     <header>
       <nav className="text-white container my-4 flex justify-between items-center py-4">
-        <Components.Logo />
+        <Components.Logo className="w-36 sm:w-fit" />
         <ul className="flex gap-5 items-center">
-          <li>
+          <li className="hidden sm:block">
             <Link href="#">Explore Marketplace</Link>
           </li>
           <li>
