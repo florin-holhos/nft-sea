@@ -1,113 +1,340 @@
-import Image from 'next/image'
+"use client";
+
+import { useEffect, useState } from "react";
+import { useAccount, useContractWrite } from "wagmi";
+import { motion } from "framer-motion";
+
+import Image from "next/image";
+import * as Components from "components";
+import * as Helpers from "lib/helpers";
+import * as Types from "types";
+import abiFile from "../../abi.json";
+
+const { abi } = abiFile;
+const contractAddress = process.env.NEXT_PUBLIC_NFT_ADDRESS as `0x${string}`;
+const contractConfig = { abi, address: contractAddress };
 
 export default function Home() {
+  const { address, isConnected, isReconnecting } = useAccount();
+  const {
+    writeAsync: mint,
+    error: mintError,
+    data,
+  } = useContractWrite({
+    ...contractConfig,
+    functionName: "mint",
+  });
+
+  console.log({ data, mintError });
+
+  const [selectedFile, setSelectedFile] = useState<File | null>();
+  const [preview, setPreview] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<null | string>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [jsonData, setJsonData] = useState<Types.ObjectMetadata | null>(null);
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [listItemAfterMint, setListItemAfterMint] = useState(true);
+
+  useEffect(() => {
+    if (!selectedFile) {
+      setPreview(null);
+      return;
+    }
+
+    const objectUrl = URL.createObjectURL(selectedFile);
+    setPreview(objectUrl);
+
+    return () => URL.revokeObjectURL(objectUrl);
+  }, [selectedFile]);
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+
+    if (!files || files.length === 0) {
+      setSelectedFile(null);
+      return;
+    }
+
+    const file = files[0];
+
+    setSelectedFile(file);
+  };
+
+  const resetForm = () => {
+    if (preview) {
+      URL.revokeObjectURL(preview);
+    }
+
+    const fileInput = document.querySelector("#nft-img") as HTMLInputElement;
+
+    if (fileInput) {
+      fileInput.value = "";
+    }
+
+    setSelectedFile(null);
+    setTitle("");
+    setDescription("");
+  };
+
+  const handleFormSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+
+    if (!selectedFile || !title || !description) {
+      return;
+    }
+
+    setIsUploading(true);
+
+    // upload file to pinata
+    const fileUploadResponse = await Helpers.pinFileToIPFS(selectedFile, title);
+
+    if (fileUploadResponse.error) {
+      setUploadError(fileUploadResponse.error);
+      setIsUploading(false);
+      return;
+    }
+
+    const imgUrl = `${process.env.NEXT_PUBLIC_PINATA_GATEWAY}/ipfs/${fileUploadResponse.data.IpfsHash}`;
+
+    // create standardized json object and upload it to decentralized storage
+    const jsonData = {
+      name: title,
+      description,
+      external_url: window.location.href,
+      image: imgUrl,
+    };
+
+    const jsonUploadResponse = await Helpers.pinJsonToIPFS(jsonData);
+
+    if (jsonUploadResponse.error) {
+      setUploadError(jsonUploadResponse.error);
+      setIsUploading(false);
+      return;
+    }
+
+    const jsonUrl = `${process.env.NEXT_PUBLIC_PINATA_GATEWAY}/ipfs/${jsonUploadResponse.data.IpfsHash}`;
+
+    setJsonData(jsonData);
+
+    // mint NFT
+    // try {
+    //   const nft = await mint({
+    //     args: [address, jsonUrl],
+    //   });
+
+    //   console.log(nft.hash);
+    // } catch (error) {
+    //   console.log(error);
+    // }
+
+    setIsUploading(false);
+    resetForm();
+  };
+
+  const handleMintButtonMouseOver = (
+    e: React.MouseEvent<HTMLButtonElement>
+  ) => {
+    if (!isConnected) {
+      document.querySelector("#wallet-btn")?.classList.add("scale-150");
+    }
+  };
+
+  const handleMintButtonMouseLeave = (
+    e: React.MouseEvent<HTMLButtonElement>
+  ) => {
+    if (!isConnected) {
+      document.querySelector("#wallet-btn")?.classList.remove("scale-150");
+    }
+  };
+
+  const canMint = isConnected && !isReconnecting && !isUploading;
+
   return (
-    <main className="flex min-h-screen flex-col items-center justify-between p-24">
-      <div className="z-10 max-w-5xl w-full items-center justify-between font-mono text-sm lg:flex">
-        <p className="fixed left-0 top-0 flex w-full justify-center border-b border-gray-300 bg-gradient-to-b from-zinc-200 pb-6 pt-8 backdrop-blur-2xl dark:border-neutral-800 dark:bg-zinc-800/30 dark:from-inherit lg:static lg:w-auto  lg:rounded-xl lg:border lg:bg-gray-200 lg:p-4 lg:dark:bg-zinc-800/30">
-          Get started by editing&nbsp;
-          <code className="font-mono font-bold">src/app/page.tsx</code>
-        </p>
-        <div className="fixed bottom-0 left-0 flex h-48 w-full items-end justify-center bg-gradient-to-t from-white via-white dark:from-black dark:via-black lg:static lg:h-auto lg:w-auto lg:bg-none">
-          <a
-            className="pointer-events-none flex place-items-center gap-2 p-8 lg:pointer-events-auto lg:p-0"
-            href="https://vercel.com?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            By{' '}
-            <Image
-              src="/vercel.svg"
-              alt="Vercel Logo"
-              className="dark:invert"
-              width={100}
-              height={24}
-              priority
-            />
-          </a>
+    <main className="container mt-6 mb-10 min-h-screen">
+      <section className="mt-8">
+        <div className="ring-1 ring-white rounded-lg px-8 py-16 bg-white bg-opacity-10 flex flex-col items-center text-center gap-8">
+          <Image
+            src="mint-new-nft.svg"
+            alt="Mint new NFT"
+            width={100}
+            height={100}
+            className="h-11 w-full"
+          />
+
+          <p className="text-white opacity-70 max-w-2xl">
+            Lorem ipsum dolor sit amet consectetur adipisicing elit. Eveniet ad
+            voluptates aperiam hic laborum, quasi harum voluptatibus dignissimos
+            optio, similique eius tempora est molestiae? Minus ea debitis
+            distinctio maiores amet?
+          </p>
         </div>
-      </div>
-
-      <div className="relative flex place-items-center before:absolute before:h-[300px] before:w-[480px] before:-translate-x-1/2 before:rounded-full before:bg-gradient-radial before:from-white before:to-transparent before:blur-2xl before:content-[''] after:absolute after:-z-20 after:h-[180px] after:w-[240px] after:translate-x-1/3 after:bg-gradient-conic after:from-sky-200 after:via-blue-200 after:blur-2xl after:content-[''] before:dark:bg-gradient-to-br before:dark:from-transparent before:dark:to-blue-700 before:dark:opacity-10 after:dark:from-sky-900 after:dark:via-[#0141ff] after:dark:opacity-40 before:lg:h-[360px] z-[-1]">
-        <Image
-          className="relative dark:drop-shadow-[0_0_0.3rem_#ffffff70] dark:invert"
-          src="/next.svg"
-          alt="Next.js Logo"
-          width={180}
-          height={37}
-          priority
-        />
-      </div>
-
-      <div className="mb-32 grid text-center lg:max-w-5xl lg:w-full lg:mb-0 lg:grid-cols-4 lg:text-left">
-        <a
-          href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
+      </section>
+      <section className="mt-24 mb-28">
+        <form
+          action="POST"
+          onSubmit={handleFormSubmit}
+          className="flex flex-col items-center justify-center w-full gap-5 max-w-2xl m-auto text-white"
         >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Docs{' '}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Find in-depth information about Next.js features and API.
-          </p>
-        </a>
+          <div
+            className="w-full rounded bg-[#383838]"
+            style={{
+              backgroundImage: `url("data:image/svg+xml,%3csvg width='100%25' height='100%25' xmlns='http://www.w3.org/2000/svg'%3e%3crect width='100%25' height='100%25' fill='none' rx='5' ry='5' stroke='%239E9E9EFF' stroke-width='1' stroke-dasharray='14' stroke-dashoffset='3' stroke-linecap='square'/%3e%3c/svg%3e")`,
+              borderRadius: 5,
+              backgroundRepeat: "no-repeat",
+              backgroundSize: "contain",
+            }}
+          >
+            {preview && (
+              <Image
+                src={preview}
+                width={100}
+                height={100}
+                className="w-full rounded-t"
+                alt="Upload"
+              />
+            )}
 
-        <a
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Learn{' '}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Learn about Next.js in an interactive course with&nbsp;quizzes!
-          </p>
-        </a>
+            <label
+              htmlFor="nft-img"
+              className="w-full hover:cursor-pointer flex items-center justify-center px-4 py-8 gap-2 text-lg flex-col"
+            >
+              <div className="flex gap-1">
+                <Image
+                  src="upload-icon.svg"
+                  width={100}
+                  height={100}
+                  className="w-4"
+                  alt="Upload"
+                />{" "}
+                Upload image
+                <input
+                  required
+                  accept="image/jpeg, image/png, image/gif"
+                  type="file"
+                  name="upload"
+                  id="nft-img"
+                  className="absolute opacity-0 -z-10"
+                  onChange={handleFileSelect}
+                />
+              </div>
+              <p className="text-sm opacity-60">
+                Supported file formats: JPG, GIF, PNG
+              </p>
+            </label>
+          </div>
+          <input
+            value={title}
+            required
+            type="text"
+            name="title"
+            id="nft-title"
+            className="w-full bg-[#383838] rounded border border-[#9E9E9E] p-4 placeholder:text-white"
+            placeholder="NFT Title"
+            onChange={(e) => setTitle(e.target.value)}
+          />
+          <textarea
+            value={description}
+            required
+            name="description"
+            id="nft-description"
+            className="w-full bg-[#383838] rounded p-4 border border-[#9E9E9E] placeholder:text-white"
+            placeholder="Description"
+            rows={6}
+            onChange={(e) => setDescription(e.target.value)}
+          />
 
-        <a
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Templates{' '}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Explore starter templates for Next.js.
-          </p>
-        </a>
+          {uploadError && (
+            <div
+              className="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-gray-800 dark:text-red-400"
+              role="alert"
+            >
+              {uploadError}
+            </div>
+          )}
 
-        <a
-          href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Deploy{' '}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Instantly deploy your Next.js site to a shareable URL with Vercel.
-          </p>
-        </a>
-      </div>
+          {mintError && (
+            <div
+              className="p-4 break-all text-sm text-red-800 rounded-lg bg-red-50 dark:bg-gray-800 dark:text-red-400"
+              role="alert"
+            >
+              {(mintError as Error & { shortMessage: string }).shortMessage}
+            </div>
+          )}
+
+          <div className="flex justify-evenly w-full gap-4">
+            <Components.Button
+              id="mint-without-listing"
+              title={canMint ? "Mint NFT" : "Wallet not connected"}
+              disabled={!canMint}
+              variant="text"
+              type="submit"
+              className="flex-1"
+              onMouseOver={handleMintButtonMouseOver}
+              onMouseLeave={handleMintButtonMouseLeave}
+              onClick={() => setListItemAfterMint(false)}
+            >
+              Mint without listing
+            </Components.Button>
+
+            <Components.Button
+              title={canMint ? "Mint NFT" : "Wallet not connected"}
+              disabled={!canMint}
+              variant="primary"
+              type="submit"
+              className="flex-1"
+              onMouseOver={handleMintButtonMouseOver}
+              onMouseLeave={handleMintButtonMouseLeave}
+              onClick={() => setListItemAfterMint(true)}
+            >
+              Mint and list immediately
+            </Components.Button>
+          </div>
+        </form>
+
+        {jsonData &&
+          (listItemAfterMint ? (
+            <Components.ConfirmationModal
+              jsonData={jsonData}
+              onClose={() => {
+                setJsonData(null);
+              }}
+            />
+          ) : (
+            <div className="fixed left-0 right-0 bottom-32 flex justify-center items-center w-full">
+              <motion.div
+                initial={{ opacity: 0, scale: 0 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0 }}
+              >
+                <div
+                  className="bg-white border w-full max-w-xl border-green-400 text-green-500 px-4 py-3 rounded relative bg-opacity-10 pr-14"
+                  role="alert"
+                >
+                  <strong className="font-bold">Success!</strong>
+                  <span className="block sm:inline">
+                    {" "}
+                    Your NFT Has Been Minted 🎉
+                  </span>
+                  <span
+                    className="absolute top-0 bottom-0 right-0 px-4 py-3"
+                    onClick={() => setJsonData(null)}
+                  >
+                    <svg
+                      className="fill-current h-6 w-6 text-green-500"
+                      role="button"
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 20 20"
+                    >
+                      <title>Close</title>
+                      <path d="M14.348 14.849a1.2 1.2 0 0 1-1.697 0L10 11.819l-2.651 3.029a1.2 1.2 0 1 1-1.697-1.697l2.758-3.15-2.759-3.152a1.2 1.2 0 1 1 1.697-1.697L10 8.183l2.651-3.031a1.2 1.2 0 1 1 1.697 1.697l-2.758 3.152 2.758 3.15a1.2 1.2 0 0 1 0 1.698z" />
+                    </svg>
+                  </span>
+                </div>
+              </motion.div>
+            </div>
+          ))}
+      </section>
     </main>
-  )
+  );
 }
